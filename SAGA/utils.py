@@ -6,12 +6,8 @@ import shutil
 import requests
 import numpy as np
 from easyquery import Query
-
-try:
-    from pyspherematch import spherematch
-except ImportError:
-    from .pyspherematch import spherematch
-
+from astropy.coordinates import SkyCoord
+from astropy import units as u
 
 
 def get_logger(level='WARNING'):
@@ -67,13 +63,13 @@ def join_table_by_coordinates(table, table_to_join,
     t1 = table
     t2 = table_to_join
 
-    ra1 = table_ra_name
-    dec1 = table_dec_name
-    ra2 = table_to_join_ra_name
-    dec2 = table_to_join_dec_name
+    sc = SkyCoord(table[table_ra_name], table[table_dec_name], unit='deg')
+    sc_to_join = SkyCoord(table_to_join[table_to_join_ra_name],
+                          table_to_join[table_to_join_dec_name], unit='deg')
 
-    idx1, idx2, _ = spherematch(t1[ra1], t1[dec1], t2[ra2], t2[dec2],
-                                tol=max_distance)
+    if not hasattr(max_distance, 'unit'):
+        max_distance = max_distance*u.deg
+    idx1, idx2, _ = sc_to_join.search_around_sky(sc, max_distance)
 
     n_matched = len(idx1)
 
