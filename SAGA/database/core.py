@@ -38,12 +38,28 @@ class DataObject(object):
 class GoogleSheets(DataObject):
     _keep_table_default = True
 
-    def __init__(self, key, gid, **kwargs):
+    def __init__(self, key, gid, localfn=None, **kwargs):
         self._url = 'https://docs.google.com/spreadsheets/d/{0}/export?format=csv&gid={1}'.format(key, gid)
+        self.localfn = localfn
         self._kwargs = kwargs
 
     def _read(self):
-        return Table.read(self._url, format='ascii.csv', **self._kwargs)
+        newdownload = False
+        try:
+            tab = Table.read(self._url, format='ascii.csv', **self._kwargs)
+            newdownload = True
+        except FileNotFoundError as e:
+            if self.localfn is not None:
+                tab = Table.read(self.localfn, format='ascii.csv')
+                print("Failed to download table, but loaded local file", self.localfn)
+            else:
+                raise
+        if self.localfn is not None:
+            if newdownload:
+                print('Writing downloaded table to', self.localfn)
+                tab.write(self.localfn, format='ascii.csv', overwrite=True)
+
+        return tab
 
 
 class FitsTable(DataObject):
@@ -84,6 +100,10 @@ class Database(object):
     root_dir : str, optional
         path to the shared SAGA Dropbox root directory
         if you don't have access, set to None.
+    use_local : bool
+        If True, a *local* copy of any spreadsheets will be saved, and if the
+        remote versions are inaccessible, the local copied will be used.  If
+        False, local versions will be neither saved nor loaded.
 
     Examples
     --------
@@ -102,7 +122,7 @@ class Database(object):
     >>> saga_objects = SAGA.ObjectCatalog(saga_database)
 
     """
-    def __init__(self, root_dir=None):
+    def __init__(self, root_dir=None, use_local=True):
         if root_dir is not None and not os.path.isdir(root_dir):
             raise ValueError('cannot locate {}'.format(root_dir))
 
@@ -115,6 +135,9 @@ class Database(object):
             'objects_to_remove': GoogleSheets('1Y3nO7VyU4jDiBPawCs8wJQt2s_PIAKRj-HSrmcWeQZo', 1379081675, header_start=1),
             'objects_to_add': GoogleSheets('1Y3nO7VyU4jDiBPawCs8wJQt2s_PIAKRj-HSrmcWeQZo', 286645731, header_start=1),
         }
+        if use_local:
+            for name, tab in self._tables.items():
+                tab.localfn = name + '.csv'
 
         if self._root_dir is not None:
             self._tables['gmm_parameters'] = NumpyBinary(os.path.join(self._root_dir, 'data', 'gmm_parameters.npz'))
