@@ -679,8 +679,10 @@ def download_catalogs_for_hosts(
     failed : np.array
     """
     failed = np.zeros(len(hosts), np.bool)
+    time_per_host = []
 
     for i, host in enumerate(hosts):
+        start_time = time.time()
         host_id = host[host_id_label]
         host_ra = host[host_ra_label]
         host_dec = host[host_dec_label]
@@ -713,5 +715,12 @@ def download_catalogs_for_hosts(
                 )
                 os.unlink(path)
                 failed[i] = True
+
+        if not failed[i]:
+            time_per_host.append(time.time() - start_time)
+            nremain = len(hosts)-i-1
+            print(time.strftime("[%m/%d %H:%M:%S]"),
+                  'This host took', time_per_host[i], 'sec',
+                  'remaining', nremain, 'hosts will take', nremain*np.mean(time_per_host[i])/60, 'min')
 
     return failed
